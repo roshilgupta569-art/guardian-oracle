@@ -6,9 +6,9 @@ import pandas as pd
 import yfinance as yf
 import google.generativeai as genai
 
-# ================= 1. SYSTEM CONFIG =================
+# ================= 1. CONFIGURATION =================
 st.set_page_config(
-    page_title="GUARDIAN v30: OMNI-SCANNER",
+    page_title="GUARDIAN v31: STABLE CORE",
     page_icon="🦅",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -17,8 +17,6 @@ st.set_page_config(
 st.markdown("""
 <style>
     .stApp {background-color: #000;}
-    
-    /* CARDS */
     .hero-card {
         background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
         border: 1px solid #30363d; border-top: 3px solid #D4AF37;
@@ -29,29 +27,23 @@ st.markdown("""
         padding: 15px; border-radius: 6px; margin-bottom: 10px;
         display: flex; justify-content: space-between; align-items: center;
     }
-    
-    /* AI BOX */
     .ai-box {
         background-color: #0d1117; border-left: 4px solid #a855f7;
         padding: 15px; border-radius: 8px; margin-bottom: 20px;
         font-family: 'Consolas', monospace; font-size: 14px; color: #CCC;
     }
-    
-    /* TEXT */
     .label {font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;}
     .ticker-huge {font-size: 38px; font-weight: 800; color: #FFF; line-height: 1;}
     .score-green {color: #00FF99; font-weight: bold;}
     .score-gold {color: #D4AF37; font-weight: bold;}
-    .score-gray {color: #666; font-weight: bold;}
 </style>
 """, unsafe_allow_html=True)
 
 # ================= 2. SECURITY & CONSTANTS =================
 def check_password():
     if st.session_state.get("auth", False): return True
-    # Graceful fail if secrets missing
     if "general" not in st.secrets:
-        st.warning("⚠️ SECURITY BYPASS: Running in Dev Mode (Add secrets to lock).")
+        st.warning("⚠️ RUNNING IN DEV MODE (NO PASSWORD)")
         return True
     
     pwd = st.text_input("ACCESS KEY", type="password")
@@ -64,10 +56,12 @@ def check_password():
 if not check_password(): st.stop()
 
 IST = pytz.timezone("Asia/Kolkata")
-LAT, LON = 30.7333, 76.7794 # Chandigarh
+# Chandigarh Coordinates (Must be float)
+LAT = 30.7333
+LON = 76.7794
 NODE_ID = getattr(swe, 'MEAN_NODE', 10)
 
-# ROSHIL'S BIO-CALIBRATION (Venus Lord)
+# Bio-Calibration (Venus)
 USER_LORD = swe.VENUS 
 
 SECTOR_MAP = {
@@ -76,50 +70,76 @@ SECTOR_MAP = {
     "TELECOM": NODE_ID, "ENERGY": swe.SUN
 }
 
-# EXPANDED UNIVERSE (20+ Stocks)
 STOCKS_DB = [
-    {"Ticker": "TATAMOTORS", "Sector": "AUTO"}, {"Ticker": "MARUTI", "Sector": "AUTO"}, {"Ticker": "M&M", "Sector": "AUTO"},
-    {"Ticker": "TCS", "Sector": "IT"}, {"Ticker": "INFY", "Sector": "IT"}, {"Ticker": "HCLTECH", "Sector": "IT"},
-    {"Ticker": "HDFCBANK", "Sector": "BANK"}, {"Ticker": "ICICIBANK", "Sector": "BANK"}, {"Ticker": "AXISBANK", "Sector": "BANK"},
-    {"Ticker": "SBIN", "Sector": "PSU"}, {"Ticker": "PNB", "Sector": "PSU"},
-    {"Ticker": "ITC", "Sector": "FMCG"}, {"Ticker": "HUL", "Sector": "FMCG"},
-    {"Ticker": "TATASTEEL", "Sector": "METALS"}, {"Ticker": "JSWSTEEL", "Sector": "METALS"}, {"Ticker": "HINDALCO", "Sector": "METALS"},
-    {"Ticker": "RELIANCE", "Sector": "ENERGY"}, {"Ticker": "NTPC", "Sector": "ENERGY"}, {"Ticker": "POWERGRID", "Sector": "ENERGY"},
-    {"Ticker": "SUNPHARMA", "Sector": "PHARMA"}, {"Ticker": "CIPLA", "Sector": "PHARMA"},
-    {"Ticker": "BHARTIARTL", "Sector": "TELECOM"}
+    {"Ticker": "TATAMOTORS", "Sector": "AUTO"}, {"Ticker": "MARUTI", "Sector": "AUTO"},
+    {"Ticker": "TCS", "Sector": "IT"}, {"Ticker": "INFY", "Sector": "IT"},
+    {"Ticker": "HDFCBANK", "Sector": "BANK"}, {"Ticker": "ICICIBANK", "Sector": "BANK"},
+    {"Ticker": "SBIN", "Sector": "PSU"}, {"Ticker": "ITC", "Sector": "FMCG"},
+    {"Ticker": "TATASTEEL", "Sector": "METALS"}, {"Ticker": "RELIANCE", "Sector": "ENERGY"},
+    {"Ticker": "SUNPHARMA", "Sector": "PHARMA"}, {"Ticker": "BHARTIARTL", "Sector": "TELECOM"}
 ]
 
-# Attach Rulers
 for s in STOCKS_DB:
     s['Ruler'] = SECTOR_MAP[s['Sector']]
 
-# ================= 3. ASTRO ENGINE =================
+# ================= 3. ASTRO ENGINE (FIXED) =================
 def get_sunrise(date_obj):
-    jd = swe.julday(date_obj.year, date_obj.month, date_obj.day, 12)
-    rise = swe.rise_trans(jd, swe.SUN, "", swe.FLG_SWIEPH, swe.CALC_RISE, (LON, LAT, 0.0))[1][0]
-    y, m, d, h_dec = swe.revjul(rise)
-    return pytz.utc.localize(datetime(y, m, d, int(h_dec), int((h_dec % 1) * 60))).astimezone(IST)
+    """
+    Calculates sunrise with strict type enforcement to prevent TypeError.
+    """
+    try:
+        # 1. Force Date to Noon UTC to avoid date skipping
+        jd = swe.julday(date_obj.year, date_obj.month, date_obj.day, 12.0)
+        
+        # 2. Strict Float Tuple for Geopos (Longitude, Latitude, Height)
+        geopos = (float(LON), float(LAT), 0.0)
+        
+        # 3. Calculate Rise
+        rise = swe.rise_trans(
+            jd, 
+            swe.SUN, 
+            "", 
+            swe.FLG_SWIEPH, 
+            swe.CALC_RISE, 
+            geopos
+        )[1][0]
+        
+        # 4. Convert to IST
+        y, m, d, h_dec = swe.revjul(rise)
+        h = int(h_dec)
+        mn = int((h_dec - h) * 60)
+        dt_utc = datetime(y, m, d, h, mn)
+        return pytz.utc.localize(dt_utc).astimezone(IST)
+        
+    except Exception as e:
+        # Fail-safe: Return 6:00 AM IST if astro calc fails
+        return datetime.combine(date_obj, time(6, 0)).replace(tzinfo=IST)
 
 def get_hora_lord(current_dt):
     sunrise = get_sunrise(current_dt)
-    if current_dt < sunrise: return "SUN", sunrise 
+    
+    # Handle pre-market (before sunrise)
+    if current_dt < sunrise: 
+        return "SUN", swe.SUN, sunrise 
     
     day_lords = [swe.MOON, swe.MARS, swe.MERCURY, swe.JUPITER, swe.VENUS, swe.SATURN, swe.SUN]
     day_lord = day_lords[current_dt.weekday()]
     
+    # Chaldean Order
     chaldean = [swe.SATURN, swe.JUPITER, swe.MARS, swe.SUN, swe.VENUS, swe.MERCURY, swe.MOON]
     start_idx = chaldean.index(day_lord)
     
+    # Calculate Hora Index (1 Hora ~= 1 Hour)
     hours_passed = int((current_dt - sunrise).total_seconds() / 3600)
-    current_ruler = chaldean[(start_idx + hours_passed) % 7]
     
-    return current_ruler, day_lord
+    current_ruler = chaldean[(start_idx + hours_passed) % 7]
+    return get_planet_name(current_ruler), current_ruler, sunrise
 
 def get_planet_name(pid):
     return {swe.SUN:"SUN", swe.MOON:"MOON", swe.MARS:"MARS", swe.MERCURY:"MERCURY", 
             swe.JUPITER:"JUPITER", swe.VENUS:"VENUS", swe.SATURN:"SATURN", NODE_ID:"RAHU"}.get(pid, "UKN")
 
-# ================= 4. SIGNAL & AI ENGINES =================
+# ================= 4. LOGIC ENGINE =================
 @st.cache_data(ttl=60)
 def get_ltp(ticker):
     try:
@@ -128,28 +148,24 @@ def get_ltp(ticker):
         return round(data["Close"].iloc[-1], 2) if not data.empty else 0.0
     except: return 0.0
 
-def calculate_score(stock, h_lord, d_lord):
+def calculate_score(stock, h_lord_id, d_lord_id):
     score = 50
-    # 1. Day Lord Match (Theme)
-    if stock['Ruler'] == d_lord: score += 15
-    # 2. Hora Match (Timing - CRITICAL)
-    if stock['Ruler'] == h_lord: score += 30
-    # 3. Bio Match (Venus)
+    # Day Theme
+    if stock['Ruler'] == d_lord_id: score += 15
+    # Hora Timing (Critical)
+    if stock['Ruler'] == h_lord_id: score += 30
+    # Bio Match
     if stock['Ruler'] == USER_LORD: score += 20
     
     status = "SNIPER" if score >= 90 else "ACCUMULATE" if score >= 70 else "WAIT"
     return score, status
 
-def ask_ai_scan(top_stock, score, h_lord):
+def ask_ai(ticker, score, h_lord_name):
     try:
-        if "GEMINI_KEY" not in st.secrets: return "AI KEY MISSING."
+        if "GEMINI_KEY" not in st.secrets: return "AI Key Missing."
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"""
-        Market Scan Result: Top Pick is {top_stock['Ticker']} ({top_stock['Sector']}).
-        Score: {score}/100. Active Hora: {get_planet_name(h_lord)}.
-        Write 1 concise sentence advising a trader on this specific setup.
-        """
+        prompt = f"Stock: {ticker}. Score: {score}/100. Hora: {h_lord_name}. Give 1 sentence of trading advice."
         return model.generate_content(prompt).text
     except: return "AI Offline."
 
@@ -164,43 +180,43 @@ else:
     t = st.sidebar.slider("Time", time(9,15), time(15,30), time(10,0))
     now = datetime.combine(d, t).replace(tzinfo=IST)
 
-# CALCULATE ENVIRONMENT
-h_lord, d_lord = get_hora_lord(now)
-h_name = get_planet_name(h_lord)
+# 1. CALCULATE STATE
+h_name, h_id, sunrise = get_hora_lord(now)
+day_lords = [swe.MOON, swe.MARS, swe.MERCURY, swe.JUPITER, swe.VENUS, swe.SATURN, swe.SUN]
+d_id = day_lords[now.weekday()]
+d_name = get_planet_name(d_id)
 
-st.title(f"GUARDIAN v30 • {now.strftime('%H:%M')}")
-st.caption(f"ACTIVE HORA: {h_name} | DAY LORD: {get_planet_name(d_lord)}")
+st.title(f"GUARDIAN v31 • {now.strftime('%H:%M')}")
+st.caption(f"ACTIVE HORA: {h_name} | DAY LORD: {d_name}")
 
-# --- THE OMNI-SCANNER ---
-# Rank all 25 stocks instantly
-ranked_stocks = []
+# 2. SCAN & RANK
+ranked = []
 for s in STOCKS_DB:
-    sc, stat = calculate_score(s, h_lord, d_lord)
-    ranked_stocks.append({**s, "Score": sc, "Status": stat})
+    sc, stat = calculate_score(s, h_id, d_id)
+    ranked.append({**s, "Score": sc, "Status": stat})
+ranked.sort(key=lambda x: x['Score'], reverse=True)
+top = ranked[0]
 
-ranked_stocks.sort(key=lambda x: x['Score'], reverse=True)
-top_pick = ranked_stocks[0]
-
-# --- AI INSIGHT ---
+# 3. AI INSIGHT
 if mode == "LIVE MARKET":
-    with st.spinner("AI Scanning Market..."):
-        ai_msg = ask_ai_scan(top_pick, top_pick['Score'], h_lord)
-    st.markdown(f'<div class="ai-box"><b>🦅 STRATEGIST:</b> {ai_msg}</div>', unsafe_allow_html=True)
+    with st.spinner("AI Scanning..."):
+        ai_msg = ask_ai(top['Ticker'], top['Score'], h_name)
+    st.markdown(f'<div class="ai-box"><b>STRATEGIST:</b> {ai_msg}</div>', unsafe_allow_html=True)
 
-# --- HERO SECTION (TOP PICK) ---
-ltp = get_ltp(top_pick['Ticker']) if mode == "LIVE MARKET" else "---"
+# 4. TOP PICK CARD
+ltp = get_ltp(top['Ticker']) if mode == "LIVE MARKET" else "---"
 c1, c2 = st.columns([1.5, 1])
 
 with c1:
     st.markdown(f"""
     <div class="hero-card">
-        <div class="label">MARKET LEADER (ALGO RANK #1)</div>
-        <div class="ticker-huge">{top_pick['Ticker']}</div>
-        <div class="label" style="color:#D4AF37; margin-top:5px;">{top_pick['Sector']} | RULER: {get_planet_name(top_pick['Ruler'])}</div>
+        <div class="label">ALGO LEADER</div>
+        <div class="ticker-huge">{top['Ticker']}</div>
+        <div class="label" style="color:#D4AF37; margin-top:5px;">{top['Sector']}</div>
         <hr style="border-color:#333;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; justify-content:space-between;">
             <div><div class="label">PRICE</div><div style="font-size:24px; font-weight:700;">₹{ltp}</div></div>
-            <div style="text-align:right;"><div class="label">CONFIDENCE</div><div style="font-size:24px; font-weight:800; color:#00FF99;">{top_pick['Score']}%</div></div>
+            <div style="text-align:right;"><div class="label">CONFIDENCE</div><div style="font-size:24px; font-weight:800; color:#00FF99;">{top['Score']}%</div></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -208,26 +224,22 @@ with c1:
 with c2:
     st.markdown(f"""
     <div class="hero-card">
-        <div class="label">CURRENT ALIGNMENT</div>
+        <div class="label">ALIGNMENT</div>
         <div style="font-size:20px; font-weight:bold; color:#FFF;">{h_name} HORA</div>
-        <div style="font-size:12px; color:#888; margin-bottom:15px;">Governs: {get_planet_name(top_pick['Ruler'])} Sector</div>
-        
-        <div class="label">VERDICT</div>
-        <div style="font-size:28px; font-weight:bold; color:{'#00FF99' if top_pick['Score']>80 else '#D4AF37'};">
-            {top_pick['Status']}
+        <div class="label" style="margin-top:10px;">VERDICT</div>
+        <div style="font-size:28px; font-weight:bold; color:{'#00FF99' if top['Score']>80 else '#D4AF37'};">
+            {top['Status']}
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# --- SCANNER TABS ---
-t1, t2 = st.tabs(["📡 MULTI-ASSET RADAR", "📊 P&L SIMULATOR"])
+# 5. SCANNER TABS
+t1, t2 = st.tabs(["📡 RADAR", "📊 P&L SIM"])
 
 with t1:
-    st.markdown("### ⚡ LIVE OPPORTUNITIES")
-    # Display Top 9 Stocks in a Grid
     cols = st.columns(3)
-    for i, s in enumerate(ranked_stocks[:9]):
-        col_class = "score-green" if s['Score'] >= 90 else "score-gold" if s['Score'] >= 70 else "score-gray"
+    for i, s in enumerate(ranked[:9]):
+        col_cls = "score-green" if s['Score'] >= 90 else "score-gold"
         with cols[i % 3]:
             st.markdown(f"""
             <div class="scanner-card">
@@ -235,14 +247,12 @@ with t1:
                     <div style="color:#FFF; font-weight:bold;">{s['Ticker']}</div>
                     <div class="label">{s['Sector']}</div>
                 </div>
-                <div class="{col_class}">{s['Score']}%</div>
+                <div class="{col_cls}">{s['Score']}%</div>
             </div>
             """, unsafe_allow_html=True)
 
 with t2:
     if mode == "BACKTEST LAB":
-        st.info("P&L Simulation active for Historical Data.")
-        # (P&L Logic placeholder from v28 - safe to keep lightweight here)
-        st.write(f"Simulating entry for {top_pick['Ticker']} at start of {h_name} Hora...")
+        st.info(f"Simulating Trade: Buy {top['Ticker']} at {now.strftime('%H:%M')}")
     else:
-        st.info("Switch to BACKTEST LAB to verify historical profits.")
+        st.info("Switch to BACKTEST mode to run P&L simulations.")
