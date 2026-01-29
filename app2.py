@@ -1,236 +1,204 @@
 import streamlit as st
-import pandas as pd
 import swisseph as swe
-import requests
 from datetime import datetime, timedelta
 import pytz
 
-# --- 1. CONFIGURATION (Clean Professional Mode) ---
-st.set_page_config(page_title="ASTRO-ALGO TERMINAL", page_icon="📈", layout="wide")
+# ================= UI CONFIG =================
+st.set_page_config(page_title="ASTRO OPTIONS PROOF TERMINAL", page_icon="📈", layout="wide")
 
-# Professional UI Styling
 st.markdown("""
-    <style>
-    .stApp {background-color: #0E1117;}
-    div.stButton > button {width: 100%; background-color: #2E86C1; color: white; font-weight: bold; border-radius: 5px;}
-    .bullish {color: #2ECC71; font-weight: bold;}
-    .bearish {color: #E74C3C; font-weight: bold;}
-    .neutral {color: #F1C40F; font-weight: bold;}
-    .big-font {font-size: 20px !important;}
-    </style>
+<style>
+.stApp {background:#0E1117}
+.card {background:#111;padding:15px;border-radius:10px;margin-bottom:10px}
+.green {color:#2ECC71;font-weight:bold}
+.red {color:#E74C3C;font-weight:bold}
+.yellow {color:#F1C40F;font-weight:bold}
+.big {font-size:22px;font-weight:bold}
+.center {text-align:center}
+</style>
 """, unsafe_allow_html=True)
 
-# --- 2. SECURITY (Password) ---
+# ================= PASSWORD =================
 def check_password():
-    if st.session_state.get('password_correct', False): return True
+    if st.session_state.get("ok"): return True
     pwd = st.text_input("ENTER PASSWORD", type="password")
     if st.button("LOGIN"):
         if pwd == st.secrets["general"]["password"]:
-            st.session_state['password_correct'] = True
+            st.session_state["ok"] = True
             st.rerun()
     return False
 
 if not check_password(): st.stop()
 
-# --- 3. DEEP ASTRO ENGINE (The Brain) ---
-LAT, LON = 30.7333, 76.7794
+IST = pytz.timezone("Asia/Kolkata")
 
-def get_astro_strength(planet_id, target_date=None):
-    if target_date is None: target_date = datetime.now()
-    jd = swe.julday(target_date.year, target_date.month, target_date.day, target_date.hour + target_date.minute/60.0)
-    
-    pos, _ = swe.calc_ut(jd, planet_id)
-    sun, _ = swe.calc_ut(jd, swe.SUN)
-    
-    # 1. COMBUSTION (Physics)
-    dist = abs(pos[0] - sun[0])
-    is_combust = dist < 14.0
-    
-    # 2. RETROGRADE (Motion)
-    is_retro = pos[3] < 0 
+# ================= ASTRO CORE =================
+def julian(dt):
+    return swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute/60)
 
-    return {"dist": round(dist, 2), "combust": is_combust, "retro": is_retro}
+def planet_strength(pid, dt):
+    jd = julian(dt)
+    p,_ = swe.calc_ut(jd, pid)
+    s,_ = swe.calc_ut(jd, swe.SUN)
 
-def check_rahu_kaal():
-    # Thursday 1:30-3:00 PM
-    now = datetime.now(pytz.timezone('Asia/Kolkata'))
-    if now.weekday() == 3 and 13 <= now.hour < 15:
-        if now.hour == 13 and now.minute < 30: return False
-        return True
-    return False
+    dist = abs(p[0]-s[0])
+    if dist > 180: dist = 360 - dist
 
-# --- 4. MARKET DATA FEED ---
-def get_price(ticker):
-    try:
-        url = f"https://indian-stock-market-api.vercel.app/stock/{ticker}"
-        data = requests.get(url, timeout=3).json()
-        return float(data['lastPrice'].replace(',', ''))
-    except: return 0.0
-
-# --- 5. SCORING & SIGNALS ---
-# Full Nifty 50 Heavyweights List
-WATCHLIST = {
-    "NIFTY 50": {"Planet": swe.SUN, "Ticker": "NIFTY 50"}, # Index
-    "BANK NIFTY": {"Planet": swe.JUPITER, "Ticker": "NIFTY BANK"}, # Index
-    "HDFC BANK": {"Planet": swe.JUPITER, "Ticker": "HDFCBANK"},
-    "RELIANCE": {"Planet": swe.SATURN, "Ticker": "RELIANCE"},
-    "ICICI BANK": {"Planet": swe.VENUS, "Ticker": "ICICIBANK"},
-    "INFOSYS": {"Planet": swe.MERCURY, "Ticker": "INFY"},
-    "ITC": {"Planet": swe.VENUS, "Ticker": "ITC"},
-    "TCS": {"Planet": swe.SATURN, "Ticker": "TCS"},
-    "L&T": {"Planet": swe.MARS, "Ticker": "LT"},
-    "AXIS BANK": {"Planet": swe.JUPITER, "Ticker": "AXISBANK"},
-    "NTPC": {"Planet": swe.SUN, "Ticker": "NTPC"},
-    "DLF": {"Planet": swe.MARS, "Ticker": "DLF"},
-    "TATA MOTORS": {"Planet": swe.VENUS, "Ticker": "TATAMOTORS"},
-    "SBI": {"Planet": swe.JUPITER, "Ticker": "SBIN"}
-}
-
-def analyze_stock(data, is_rahu):
-    physics = get_astro_strength(data['Planet'])
-    
-    # Base Score
-    score = 60
-    
-    # Astro Logic
-    if physics['combust']: score -= 35  # Weak
-    elif physics['dist'] > 20: score += 15 # Strong
-    
-    if physics['retro']: score -= 20   # Unstable
-    
-    # Rahu Penalty
-    if is_rahu: score -= 20
-    
-    # Final Signal
-    signal = "NEUTRAL"
-    if score >= 80: signal = "VERY BULLISH"
-    elif score >= 65: signal = "BULLISH"
-    elif score <= 30: signal = "VERY BEARISH"
-    elif score <= 45: signal = "BEARISH"
-    
     return {
-        "score": max(0, min(100, score)),
-        "signal": signal,
-        "reason": "Combust" if physics['combust'] else "Strong" if physics['dist'] > 20 else "Neutral",
-        "astro": physics
+        "combust": dist < 14,
+        "retro": p[3] < 0
     }
 
-# --- 6. DASHBOARD UI ---
-st.title("📈 ASTRO-ALGO TERMINAL")
-st.caption(f"LIVE MARKET DATA | {datetime.now().strftime('%H:%M:%S')}")
+def moon_strength(dt):
+    jd = julian(dt)
+    m,_ = swe.calc_ut(jd, swe.MOON)
+    s,_ = swe.calc_ut(jd, swe.SUN)
 
-# Run Global Scan
-results = []
-is_rahu = check_rahu_kaal()
+    phase = abs(m[0]-s[0])
+    if phase > 180: phase = 360 - phase
 
-if is_rahu:
-    st.error("⚠️ RAHU KAAL ACTIVE: Market is Volatile. Reduce Quantity.")
+    return m[3] > 12.5, round(m[3],2), round(phase,2)
 
-for name, data in WATCHLIST.items():
-    try:
-        price = get_price(data['Ticker'])
-        analysis = analyze_stock(data, is_rahu)
-        results.append({
-            "Name": name, 
-            "Price": price, 
-            "Signal": analysis['signal'],
-            "Score": analysis['score'],
-            "Reason": analysis['reason']
+# ================= RAHU KAAL =================
+RAHU = {0:(7,9),1:(9,10.5),2:(12,13.5),3:(13.5,15),4:(10.5,12)}
+
+def is_rahu(dt):
+    if dt.weekday() not in RAHU: return False
+    a,b = RAHU[dt.weekday()]
+    t = dt.hour + dt.minute/60
+    return a <= t <= b
+
+# ================= VOLATILITY =================
+def pvi(dt):
+    jd = julian(dt)
+    moon,_ = swe.calc_ut(jd, swe.MOON)
+    mars,_ = swe.calc_ut(jd, swe.MARS)
+    sun,_ = swe.calc_ut(jd, swe.SUN)
+
+    angle = abs(moon[0]-sun[0])
+    if angle > 180: angle = 360-angle
+
+    v = 40
+    if moon[3] > 13.5: v += 20
+    if angle < 15 or abs(angle-90)<10 or abs(angle-180)<10: v += 20
+    if mars[3] > 0.7: v += 10
+
+    return min(100, v)
+
+# ================= OPTION BIAS =================
+def option_bias(dt, planet):
+    phys = planet_strength(planet, dt)
+    moon_ok, speed, _ = moon_strength(dt)
+    vol = pvi(dt)
+    rahu = is_rahu(dt)
+
+    score = 50
+    if not phys["combust"]: score += 10
+    if phys["retro"]: score -= 20
+    if moon_ok: score += 10
+    score += (vol-50)*0.3
+    if rahu: score -= 15
+
+    if score >= 65: return "BUY CALL", int(score)
+    if score <= 35: return "BUY PUT", int(score)
+    return "NO TRADE", int(score)
+
+# ================= HERO STOCK (FIXED) =================
+def hero_stock_of_day(dt):
+    moon_ok, speed, _ = moon_strength(dt)
+    if speed > 13.5: return "BANKNIFTY"
+    if speed < 12: return "NIFTY"
+    return "FINNIFTY"
+
+# ================= PICK TIMING =================
+def best_trade_window(dt):
+    hour = dt.hour + dt.minute/60
+    if 9.25 <= hour <= 10.15: return "🔥 OPENING MOMENTUM"
+    if 11.15 <= hour <= 12.30: return "🎯 MIDDAY TREND"
+    if 14.15 <= hour <= 15.10: return "⚡ POWER HOUR"
+    return "⛔ NO EDGE WINDOW"
+
+# ================= EXPIRY TRAP =================
+def expiry_trap(dt):
+    if dt.weekday() != 3: return False
+    mercury = planet_strength(swe.MERCURY, dt)
+    moon_ok, speed, phase = moon_strength(dt)
+
+    trap = 0
+    if mercury["combust"]: trap += 30
+    if speed < 12: trap += 25
+    if phase < 20 or phase > 160: trap += 20
+    if is_rahu(dt): trap += 25
+
+    return trap >= 60
+
+# ================= BACKTEST ENGINE =================
+def backtest(date, start, end):
+    rows = []
+    t = datetime.combine(date, start).replace(tzinfo=IST)
+    end_t = datetime.combine(date, end).replace(tzinfo=IST)
+
+    while t <= end_t:
+        bias, score = option_bias(t, swe.JUPITER)
+        rows.append({
+            "Time": t.strftime("%H:%M"),
+            "Bias": bias,
+            "Confidence": score,
+            "Volatility": pvi(t),
+            "Rahu": is_rahu(t),
+            "Expiry Trap": expiry_trap(t)
         })
-    except: pass
+        t += timedelta(minutes=15)
+    return rows
 
-# --- TABS ---
-tab1, tab2, tab3 = st.tabs(["🎯 SNIPER TRADES", "📊 NIFTY SCANNER", "🔮 TOMORROW & BTST"])
+# ================= LIVE DASHBOARD =================
+now = datetime.now(IST)
 
-# TAB 1: SNIPER (Best 1-2 Trades)
-with tab1:
-    st.markdown("### 🔥 TODAY'S HIGH CONVICTION TRADES")
-    
-    # Filter for Extreme Scores (>80 or <30)
-    snipers = [r for r in results if r['Score'] >= 80 or r['Score'] <= 30]
-    
-    if not snipers:
-        st.info("No High-Probability setups right now. Market is choppy. Wait.")
-    else:
-        col1, col2 = st.columns(2)
-        for i, trade in enumerate(snipers[:2]): # Max 2 trades
-            with (col1 if i==0 else col2):
-                color = "green" if "BULLISH" in trade['Signal'] else "red"
-                action = "BUY / CALL" if "BULLISH" in trade['Signal'] else "SELL / PUT"
-                
-                st.markdown(f"""
-                <div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; background-color: #111;">
-                    <h2 style="color: {color};">{trade['Name']}</h2>
-                    <h3 style="color: white;">ACTION: {action}</h3>
-                    <p>Price: ₹{trade['Price']}<br>
-                    Logic: {trade['Reason']} Astro-Alignment<br>
-                    Confidence: {trade['Score']}%</p>
-                </div>
-                """, unsafe_allow_html=True)
+bias, conf = option_bias(now, swe.JUPITER)
+vol = pvi(now)
+hero = hero_stock_of_day(now)
+window = best_trade_window(now)
 
-# TAB 2: NIFTY SCANNER (Categorized)
-with tab2:
-    c1, c2, c3, c4 = st.columns(4)
-    
-    with c1:
-        st.markdown("#### 🚀 VERY BULLISH")
-        for r in results:
-            if r['Signal'] == "VERY BULLISH": 
-                st.success(f"{r['Name']} ({r['Price']})")
-                
-    with c2:
-        st.markdown("#### 🟢 BULLISH")
-        for r in results:
-            if r['Signal'] == "BULLISH": 
-                st.info(f"{r['Name']} ({r['Price']})")
-                
-    with c3:
-        st.markdown("#### 🔴 BEARISH")
-        for r in results:
-            if r['Signal'] == "BEARISH": 
-                st.warning(f"{r['Name']} ({r['Price']})")
-                
-    with c4:
-        st.markdown("#### 🩸 VERY BEARISH")
-        for r in results:
-            if r['Signal'] == "VERY BEARISH": 
-                st.error(f"{r['Name']} ({r['Price']})")
+st.title("📈 ASTRO OPTIONS PROOF TERMINAL")
+st.caption(now.strftime("%d %b %Y | %H:%M IST"))
 
-# TAB 3: TOMORROW & BTST
-with tab3:
-    st.markdown("### 🔮 BTST & TOMORROW'S VIEW")
-    
-    # 1. BTST ANALYSIS (Moon Check)
-    tmrw_date = datetime.now() + timedelta(days=1)
-    
-    # Check Moon Strength for Tomorrow
-    moon_phys = get_astro_strength(swe.MOON, tmrw_date)
-    is_moon_good = not moon_phys['combust'] # Simple logic for now
-    
-    btst_signal = "✅ BTST BUY" if is_moon_good else "❌ BTST AVOID"
-    btst_color = "green" if is_moon_good else "red"
-    
-    st.markdown(f"""
-    <div style="background-color: #222; padding: 10px; border-left: 5px solid {btst_color};">
-        <h3>BTST DECISION: <span style="color:{btst_color}">{btst_signal}</span></h3>
-        <p>Moon Phase Analysis for Tomorrow Open.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.divider()
-    
-    # 2. SECTOR PREDICTION
-    st.markdown("#### 🏗️ SECTOR ROTATION (TOMORROW)")
-    
-    cols = st.columns(3)
-    sectors = [("NTPC (Power)", swe.SUN), ("DLF (Realty)", swe.MARS), ("HDFC (Bank)", swe.JUPITER)]
-    
-    for i, (name, planet) in enumerate(sectors):
-        phys = get_astro_strength(planet, tmrw_date)
-        view = "STRONG" if not phys['combust'] else "WEAK"
-        color = "green" if view == "STRONG" else "red"
-        
-        with cols[i]:
-            st.markdown(f"**{name}**")
-            st.markdown(f":{color}[**{view}**]")
-            st.caption(f"Dist from Sun: {phys['dist']}°")
+c1,c2,c3,c4 = st.columns(4)
+c1.metric("RIGHT NOW", bias)
+c2.metric("CONFIDENCE", f"{conf}%")
+c3.metric("VOLATILITY", vol)
+c4.metric("HERO STOCK", hero)
+
+st.progress(vol/100)
+
+st.markdown(f"<div class='card big center'>{window}</div>", unsafe_allow_html=True)
+
+if bias == "NO TRADE" or vol < 45 or "NO EDGE" in window:
+    st.warning("🚫 DO NOT TRADE NOW — CAPITAL PROTECTION MODE")
+else:
+    st.success(f"✅ ACTIONABLE: {bias} on {hero}")
+
+if expiry_trap(now):
+    st.error("☠️ EXPIRY DAY ASTRO TRAP — SCALP ONLY OR STAY OUT")
+
+# ================= BACKTEST MODE =================
+st.divider()
+st.subheader("🧪 BACKTEST PROOF MODE")
+
+colA,colB,colC = st.columns(3)
+date = colA.date_input("Select Date")
+start = colB.time_input("Start Time", value=datetime.strptime("09:15","%H:%M").time())
+end = colC.time_input("End Time", value=datetime.strptime("15:15","%H:%M").time())
+
+if st.button("RUN BACKTEST"):
+    data = backtest(date, start, end)
+    st.dataframe(data, use_container_width=True)
+
+st.info("""
+HOW TO USE BACKTEST:
+• Pick any past date  
+• See what signal system gave at each 15-min slot  
+• Match with chart manually  
+• This builds REAL confidence  
+""")
+
+st.success("Terminal fully armed. Discipline decides profits. 😈📈")
