@@ -2,34 +2,53 @@ import streamlit as st
 import swisseph as swe
 from datetime import datetime, timedelta, time
 import pytz
-import pandas as pd
 import hashlib
 
-# ================= UI CONFIG =================
-st.set_page_config(page_title="GUARDIAN v13: BTST LOCK", page_icon="🦅", layout="wide")
+# ================== APP CONFIGURATION ==================
+st.set_page_config(
+    page_title="GUARDIAN v15 • PERSONAL ASTRO ENGINE",
+    page_icon="🦅",
+    layout="wide"
+)
 
+# Dark Mode & Hacker UI
 st.markdown("""
 <style>
-.stApp {background-color: #000000;}
-.hero-card {background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); padding: 25px; border-radius: 12px; border: 1px solid #444; margin-bottom: 20px;}
-.btst-card {background: linear-gradient(135deg, #1a0b2e, #2d1b4e); padding: 25px; border-radius: 12px; border: 1px solid #553377; margin-bottom: 20px;}
-.score-big {font-size: 48px; font-weight: 800; color: #00FF99;}
-.ticker-big {font-size: 32px; font-weight: bold; color: #FFF; margin: 0;}
-.state-box {padding: 10px; border-radius: 5px; font-weight: bold; text-align: center; margin-top: 10px;}
-.enter {background-color: #004400; color: #00FF99; border: 1px solid #00FF99;}
-.hold {background-color: #444400; color: #FFCC00; border: 1px solid #FFCC00;}
-.wait {background-color: #222; color: #888; border: 1px solid #444;}
-.avoid {background-color: #440000; color: #FF3333; border: 1px solid #FF3333;}
-.btst-yes {color: #00FF99; font-weight: 900; font-size: 24px;}
-.btst-no {color: #FF3333; font-weight: 900; font-size: 24px;}
+    .stApp {background-color: #000000;}
+    
+    /* CARD STYLES */
+    .hero-card {
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+        padding: 25px; border-radius: 14px; border: 1px solid #444;
+        box-shadow: 0 4px 15px rgba(0, 255, 153, 0.1);
+        margin-bottom: 20px;
+    }
+    .btst-card {
+        background: linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 100%);
+        padding: 25px; border-radius: 14px; border: 1px solid #553377;
+        box-shadow: 0 4px 15px rgba(153, 0, 255, 0.1);
+        margin-bottom: 20px;
+    }
+    
+    /* TYPOGRAPHY */
+    .score-big {font-size: 52px; font-weight: 900; color: #00FF99;}
+    .ticker-big {font-size: 36px; font-weight: 800; color: #FFFFFF; margin-bottom: 5px;}
+    .sub-text {font-size: 14px; color: #AAAAAA; text-transform: uppercase; letter-spacing: 1px;}
+    
+    /* STATE BOXES */
+    .state-box {padding: 12px; border-radius: 8px; font-weight: 800; text-align: center; letter-spacing: 1px;}
+    .enter {background: #003300; color: #00FF99; border: 1px solid #00FF99;}
+    .hold {background: #444400; color: #FFCC00; border: 1px solid #FFCC00;}
+    .wait {background: #222222; color: #AAAAAA; border: 1px solid #444444;}
+    .avoid {background: #440000; color: #FF3333; border: 1px solid #FF3333;}
 </style>
 """, unsafe_allow_html=True)
 
-# ================= SECURITY =================
+# ================== SECURITY LAYER ==================
 def check_password():
     if st.session_state.get("auth", False): return True
-    pwd = st.text_input("ENTER QUANTUM KEY", type="password")
-    if st.button("INITIATE"):
+    pwd = st.text_input("ENTER ACCESS KEY", type="password")
+    if st.button("UNLOCK TERMINAL"):
         if pwd == st.secrets["general"]["password"]:
             st.session_state["auth"] = True
             st.rerun()
@@ -39,198 +58,226 @@ if not check_password(): st.stop()
 
 IST = pytz.timezone("Asia/Kolkata")
 
-# ================= DATABASE =================
+# ================== DATABASE & MAPPINGS ==================
+# Safe Node Handling
+NODE_ID = getattr(swe, 'MEAN_NODE', 10) # Fallback to 10 if constant missing
+
 SECTOR_MAP = {
-    "BANK_PVT": swe.MERCURY, "BANK_PSU": swe.JUPITER, "IT": swe.SATURN,
-    "AUTO": swe.VENUS, "PHARMA": swe.SUN, "FMCG": swe.MOON,
-    "METALS": swe.MARS, "REALTY": swe.MARS, "ENERGY": swe.SUN,
-    "OIL_GAS": swe.SATURN, "TELECOM": swe.RAHU, "FINANCE": swe.JUPITER
+    "BANK": swe.MERCURY,
+    "IT": swe.SATURN,
+    "AUTO": swe.VENUS,
+    "PHARMA": swe.SUN,
+    "FMCG": swe.MOON,
+    "METALS": swe.MARS,
+    "ENERGY": swe.SUN,
+    "FINANCE": swe.JUPITER,
+    "TELECOM": NODE_ID
 }
 
-STOCK_UNIVERSE = {
-    "BANK_PVT": ["HDFCBANK", "ICICIBANK", "AXISBANK", "KOTAKBANK"],
-    "BANK_PSU": ["SBIN", "BANKBARODA", "PNB", "CANBK"],
+STOCKS = {
+    "BANK": ["HDFCBANK", "ICICIBANK", "AXISBANK", "KOTAKBANK"],
     "IT": ["TCS", "INFY", "HCLTECH", "WIPRO"],
-    "AUTO": ["TATAMOTORS", "M&M", "MARUTI", "BAJAJ-AUTO"],
-    "PHARMA": ["SUNPHARMA", "DRREDDY", "CIPLA"],
+    "AUTO": ["TATAMOTORS", "MARUTI", "M&M"],
+    "PHARMA": ["SUNPHARMA", "DRREDDY"],
     "FMCG": ["ITC", "HUL", "NESTLEIND"],
-    "METALS": ["TATASTEEL", "JSWSTEEL", "HINDALCO"],
-    "REALTY": ["DLF", "GODREJPROP"],
-    "ENERGY": ["NTPC", "POWERGRID", "TATAPOWER"],
-    "OIL_GAS": ["RELIANCE", "ONGC", "BPCL"],
-    "TELECOM": ["BHARTIARTL"],
-    "FINANCE": ["BAJFINANCE", "LICI"]
+    "METALS": ["TATASTEEL", "JSWSTEEL"],
+    "ENERGY": ["NTPC", "POWERGRID"],
+    "FINANCE": ["BAJFINANCE", "LICI"],
+    "TELECOM": ["BHARTIARTL"]
 }
 
 NIFTY_DB = []
-for sector, tickers in STOCK_UNIVERSE.items():
-    ruler = SECTOR_MAP.get(sector, swe.MERCURY)
-    for t in tickers:
-        NIFTY_DB.append({"Ticker": t, "Sector": sector, "Ruler": ruler})
+for sec, ticks in STOCKS.items():
+    for t in ticks:
+        NIFTY_DB.append({"Ticker": t, "Sector": sec, "Ruler": SECTOR_MAP[sec]})
 
-# ================= CORE ENGINES =================
+# ================== ASTRO CORE ENGINE ==================
 def julian(dt):
     return swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute/60.0)
 
-def get_moon_speed(dt):
+def planet_strength(pid, dt):
+    jd = julian(dt)
+    pos, _ = swe.calc_ut(jd, pid)
+    sun, _ = swe.calc_ut(jd, swe.SUN)
+    
+    # Physics Calculation
+    dist = abs(pos[0] - sun[0])
+    
+    score = 50
+    if dist < 14.0: score -= 30 # Combust (Weak)
+    if pos[3] < 0: score -= 15  # Retrograde (Unstable)
+    if dist > 60.0: score += 20 # Visible (Strong)
+    
+    return score
+
+def moon_speed(dt):
     jd = julian(dt)
     m, _ = swe.calc_ut(jd, swe.MOON)
     return m[3]
 
-def get_planet_strength(planet_id, dt):
-    jd = julian(dt)
-    pos, _ = swe.calc_ut(jd, planet_id)
-    sun, _ = swe.calc_ut(jd, swe.SUN)
-    dist = abs(pos[0] - sun[0])
+# ================== PERSONAL RESONANCE ENGINE ==================
+def user_resonance(dob, pid):
+    """Matches Stock Ruler to User's Birth Day Lord"""
+    weekday = dob.weekday() # 0=Mon
     
-    score = 50
-    if dist < 14.0: score -= 30 # Combust
-    if pos[3] < 0: score -= 15  # Retro
-    if dist > 60: score += 20   # Strong
-    return score
+    day_lord_map = {
+        0: swe.MOON, 1: swe.MARS, 2: swe.MERCURY,
+        3: swe.JUPITER, 4: swe.VENUS, 5: swe.SATURN, 6: swe.SUN
+    }
+    user_lord = day_lord_map.get(weekday)
+    
+    # Friendship Matrix
+    friends = {
+        swe.SUN: [swe.MOON, swe.MARS, swe.JUPITER],
+        swe.MOON: [swe.SUN, swe.MERCURY],
+        swe.MARS: [swe.SUN, swe.MOON],
+        swe.MERCURY: [swe.SUN, swe.VENUS],
+        swe.JUPITER: [swe.SUN, swe.MOON],
+        swe.VENUS: [swe.MERCURY, swe.SATURN],
+        swe.SATURN: [swe.MERCURY, swe.VENUS],
+        NODE_ID: [swe.MERCURY, swe.VENUS]
+    }
+    
+    if pid == user_lord: return 50      # Jackpot Match
+    if pid in friends.get(user_lord, []): return 25 # Friendly
+    return 0 # Neutral/Enemy
 
-def get_user_resonance(dob, planet_id):
-    day_lord = {0: swe.SUN, 1: swe.MOON, 2: swe.MARS, 3: swe.MERCURY, 4: swe.JUPITER, 5: swe.VENUS, 6: swe.SATURN}[dob.weekday()]
-    return 40 if planet_id == day_lord else 0
+def personal_multiplier(dob):
+    """Boosts score based on 'Golden Hours' of birth"""
+    h = dob.hour
+    if 6 <= h <= 10: return 1.08  # Morning Born (Active)
+    if 11 <= h <= 15: return 1.12 # Midday Born (Peak)
+    if 16 <= h <= 20: return 1.05 # Evening Born (Stable)
+    return 1.0
 
+# ================== INTRADAY PULSE ENGINE ==================
 def intraday_entropy(ticker, dt):
-    minute_block = (dt.minute // 15) * 15 
-    time_key = f"{dt.strftime('%Y%m%d%H')}{minute_block}"
-    key = f"{ticker}{time_key}"
+    """Generates 15-minute shifted noise pattern"""
+    block = (dt.minute // 15) * 15
+    key = f"{ticker}{dt.strftime('%Y%m%d%H')}{block}"
     h = int(hashlib.md5(key.encode()).hexdigest(), 16)
-    return (h % 21) - 10
+    return ((h % 21) - 10) * 1.6 # Noise Amplitude
 
 def trade_state(score, dt):
-    market_open = 9 <= dt.hour < 15.5
-    if score >= 120 and market_open: return "🚀 SNIPER ENTRY", "enter"
-    if score >= 105: return "🛡️ HOLD / SCALP", "hold"
-    if score <= 80: return "⛔ AVOID / TRAP", "avoid"
+    """Determines actionable signal"""
+    # Market Hours Check (9:15 - 15:30)
+    market_open = (time(9,15) <= dt.time() <= time(15,30))
+    
+    if not market_open:
+        return "⛔ MARKET CLOSED", "avoid"
+        
+    if score >= 115: return "🚀 SNIPER ENTRY", "enter"
+    if score >= 100: return "🛡️ HOLD / SCALP", "hold"
+    if score <= 85: return "⛔ AVOID / TRAP", "avoid"
     return "⏳ WAIT", "wait"
 
-# ================= CALCULATORS =================
-def calculate_score(stock, dob, dt, apply_noise=True):
-    astro = get_planet_strength(stock['Ruler'], dt)
-    user = get_user_resonance(dob, stock['Ruler'])
-    base_total = astro + user
-    noise = intraday_entropy(stock['Ticker'], dt) if apply_noise else 0
-    return base_total + noise
+# ================== MAIN CALCULATORS ==================
+def calc_score(stock, dob, dt, noise=True):
+    s = planet_strength(stock["Ruler"], dt)
+    u = user_resonance(dob, stock["Ruler"])
+    n = intraday_entropy(stock["Ticker"], dt) if noise else 0
+    return s + u + n
 
-def get_day_hero(dob, date_obj):
-    # Lock Hero based on 9:15 AM data (Noise Free)
-    morning_bell = datetime.combine(date_obj, time(9, 15))
-    ranked = []
+def day_hero(dob, date_):
+    """Locks the Hero Stock based on 9:15 AM data (Noise Free)"""
+    bell = datetime.combine(date_, time(9, 15))
+    best_stock = None
+    best_score = -1
+    
     for stock in NIFTY_DB:
-        score = calculate_score(stock, dob, morning_bell, apply_noise=False)
-        ranked.append((stock, score))
-    ranked.sort(key=lambda x: x[1], reverse=True)
-    return ranked[0][0], ranked[0][1]
+        # Calculate Pure Base Score
+        sc = calc_score(stock, dob, bell, noise=False)
+        if sc > best_score:
+            best_score = sc
+            best_stock = stock
+            
+    return best_stock, best_score
 
-def check_btst_signal(dob, today_date):
-    """
-    Compares Today's Close Speed vs Tomorrow's Open Speed.
-    """
-    today_close = datetime.combine(today_date, time(15, 30))
-    tmrw_open = datetime.combine(today_date + timedelta(days=1), time(9, 15))
+def btst_check(dob, date_):
+    """Analyzes Overnight Momentum"""
+    close_time = datetime.combine(date_, time(15, 30))
+    open_time = datetime.combine(date_ + timedelta(days=1), time(9, 15))
     
-    speed_now = get_moon_speed(today_close)
-    speed_tmrw = get_moon_speed(tmrw_open)
+    # 1. Moon Acceleration
+    accel = moon_speed(open_time) > moon_speed(close_time)
     
-    # 1. Acceleration Logic
-    is_accelerating = speed_tmrw > speed_now
+    # 2. Tomorrow's Hero Strength
+    hero_tmr, score_tmr = day_hero(dob, date_ + timedelta(days=1))
     
-    # 2. Tomorrow's Hero Score
-    hero_tmrw, score_tmrw = get_day_hero(dob, today_date + timedelta(days=1))
+    # 3. Final Verdict
+    conf = score_tmr + (8 if accel else -6)
     
-    # Final Verdict
-    if is_accelerating and score_tmrw > 90:
-        return "YES", "ACCELERATING (+)", hero_tmrw
-    else:
-        return "NO", "DECELERATING (-)", hero_tmrw
+    if conf >= 110: return "YES", "STRONG MOON ACCEL (+)", hero_tmr
+    if conf >= 95: return "MAYBE", "MIXED SIGNALS (~)", hero_tmr
+    return "NO", "WEAK MOMENTUM (-)", hero_tmr
 
-# ================= UI LAYOUT =================
-st.sidebar.title("🧬 BIO-LOCK")
-with st.sidebar.form("bio"):
-    u_dob = st.date_input("DATE OF BIRTH", datetime(1990, 1, 1))
-    st.form_submit_button("CALIBRATE")
+# ================== SIDEBAR CONTROLS ==================
+st.sidebar.title("🧬 BIO-CALIBRATION")
+st.sidebar.caption("Align Algorithm to Your Birth Chart")
+u_dob = st.sidebar.date_input("DATE OF BIRTH", datetime(1990, 1, 1))
+u_time = st.sidebar.time_input("TIME OF BIRTH", time(12, 0)) # Used for multiplier
+
+# Merge DOB + Time for multiplier function
+full_dob = datetime.combine(u_dob, u_time)
 
 st.sidebar.markdown("---")
-st.sidebar.title("🕰️ TIME CONTROL")
-selected_date = st.sidebar.date_input("SELECT DATE", datetime.now(IST))
+st.sidebar.title("🕰️ TIME MACHINE")
+sel_date = st.sidebar.date_input("MISSION DATE", datetime.now(IST))
 
 sim_time = datetime.now(IST).time()
-if selected_date != datetime.now(IST).date():
+if sel_date != datetime.now(IST).date():
     sim_time = st.sidebar.slider("BACKTEST TIME", time(9,15), time(15,30), time(9,15), step=timedelta(minutes=15))
 
-current_dt = datetime.combine(selected_date, sim_time)
+now_dt = datetime.combine(sel_date, sim_time)
 
-# ================= DASHBOARD =================
-st.title(f"🦅 GUARDIAN v13: {selected_date.strftime('%A, %d %b')}")
+# ================== DASHBOARD DISPLAY ==================
+# 1. Calculate Data
+hero, base_score = day_hero(u_dob, sel_date)
+# Apply Personal Multiplier to final live score
+multiplier = personal_multiplier(full_dob)
+live_score = calc_score(hero, u_dob, now_dt, noise=True) * multiplier
 
-# HERO CALCULATIONS
-hero_today, hero_base = get_day_hero(u_dob, selected_date)
-btst_signal, btst_reason, hero_tmrw = check_btst_signal(u_dob, selected_date)
+state_text, css_class = trade_state(live_score, now_dt)
+btst_sig, btst_reason, hero_tmr = btst_check(u_dob, sel_date)
 
-# LIVE SCORE
-current_score = calculate_score(hero_today, u_dob, current_dt, apply_noise=True)
-status_text, status_class = trade_state(current_score, current_dt)
+st.title(f"🦅 GUARDIAN v15 • {sel_date.strftime('%A, %d %b')}")
 
-# --- TABS ---
-tab_live, tab_btst = st.tabs(["🚀 TODAY'S LIVE ACTION", "🔮 TOMORROW & BTST"])
+col1, col2 = st.columns([2, 1])
 
-# TAB 1: LIVE
-with tab_live:
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.markdown(f"""
-        <div class="hero-card">
-            <div style="color:#888; letter-spacing:2px;">LOCKED HERO (TODAY)</div>
-            <div class="ticker-big">{hero_today['Ticker']}</div>
-            <div style="color:#AAA;">{hero_today['Sector']}</div>
-            <hr style="border-color:#444;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div class="state-box {status_class}" style="flex-grow:1; margin-right:10px;">{status_text}</div>
-                <div class="score-big">{int(current_score)}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("### 📉 SIGNAL TRAJECTORY")
-        # Generate Chart
-        data = []
-        t = datetime.combine(selected_date, time(9, 15))
-        end = datetime.combine(selected_date, time(15, 30))
-        while t <= end:
-            s = calculate_score(hero_today, u_dob, t, apply_noise=True)
-            data.append(s)
-            t += timedelta(minutes=15)
-        st.line_chart(data, height=180)
-        st.caption("Score > 120 = BUY ZONE")
-
-# TAB 2: BTST
-with tab_btst:
-    # Color Logic
-    is_yes = btst_signal == "YES"
-    css_class = "btst-yes" if is_yes else "btst-no"
-    box_color = "#003300" if is_yes else "#330000"
-    border_color = "#00FF99" if is_yes else "#FF3333"
-    
-    st.markdown(f"""
-    <div class="btst-card" style="background:{box_color}; border:1px solid {border_color};">
-        <h2 style="margin:0; color:#BBB;">SHOULD WE BTST?</h2>
-        <div class="{css_class}">{btst_signal}</div>
-        <p style="color:#CCC; margin-top:5px;">Reason: Moon Velocity is {btst_reason}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("### 🔭 HERO FOR TOMORROW (FIXED)")
+with col1:
     st.markdown(f"""
     <div class="hero-card">
-        <div style="color:#888;">TARGET ASSET</div>
-        <div class="ticker-big" style="color:#FFCC00;">{hero_tmrw['Ticker']}</div>
-        <div style="color:#AAA;">Sector: {hero_tmrw['Sector']}</div>
-        <div style="margin-top:10px; font-size:14px; color:#888;">
-            *If BTST is YES, buy this at 3:20 PM Today.
+        <div class="sub-text">LOCKED HERO (PERSONALIZED)</div>
+        <div class="ticker-big">{hero['Ticker']}</div>
+        <div class="sub-text" style="color:#AAA;">{hero['Sector']} | RULER STRENGTH: {int(base_score)}</div>
+        <hr style="border-color:#444;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="state-box {css_class}" style="flex-grow:1; margin-right:15px;">{state_text}</div>
+            <div class="score-big">{int(live_score)}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Signal Explanation
+    if "SNIPER" in state_text:
+        st.success(f"🔥 **ACTION:** {hero['Ticker']} is in a High-Probability Buy Zone for YOU.")
+    elif "AVOID" in state_text:
+        st.error(f"🛑 **ACTION:** Intraday noise is high. Stay away from {hero['Ticker']} for now.")
+
+with col2:
+    is_yes = btst_sig == "YES"
+    btst_col = "#00FF99" if is_yes else "#FF3333"
+    
+    st.markdown(f"""
+    <div class="btst-card">
+        <div class="sub-text">BTST SIGNAL</div>
+        <div style="font-size:32px; font-weight:900; color:{btst_col};">{btst_sig}</div>
+        <p style="color:#CCC; font-size:14px; margin-top:5px;">{btst_reason}</p>
+        <hr style="border-color:#553377;">
+        <div class="sub-text">TOMORROW'S TARGET</div>
+        <div style="font-size:24px; font-weight:bold; color:#FFF;">{hero_tmr['Ticker']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ================== FOOTER ==================
+st.caption(f"System ID: {hashlib.md5(str(sel_date).encode()).hexdigest()[:8]} | Calibrated to User: {u_dob.strftime('%Y-%m-%d')}")
