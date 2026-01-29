@@ -5,64 +5,61 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 
-# --- 1. CONFIGURATION (Dark Mode & Security) ---
-st.set_page_config(page_title="QUANTUM SNIPER v6.0", page_icon="ojo", layout="wide")
+# --- 1. CONFIGURATION (Clean Professional Mode) ---
+st.set_page_config(page_title="ASTRO-ALGO TERMINAL", page_icon="📈", layout="wide")
 
-# Custom "Hacker" UI Styling
+# Professional UI Styling
 st.markdown("""
     <style>
-    .stApp {background-color: #050505;}
-    div.stButton > button {width: 100%; background-color: #00FF99; color: black; font-weight: bold; border: none;}
-    .metric-container {background-color: #111; padding: 15px; border-radius: 5px; border: 1px solid #333;}
-    h1, h2, h3 {font-family: 'Roboto Mono', monospace; color: #E0E0E0;}
-    span {font-family: 'Roboto Mono', monospace;}
-    
-    /* Sniper Box Styling */
-    .sniper-box {border: 2px solid #00FF99; padding: 20px; border-radius: 10px; background-color: #001100;}
-    .trap-box {border: 2px solid #FF3333; padding: 20px; border-radius: 10px; background-color: #110000;}
+    .stApp {background-color: #0E1117;}
+    div.stButton > button {width: 100%; background-color: #2E86C1; color: white; font-weight: bold; border-radius: 5px;}
+    .bullish {color: #2ECC71; font-weight: bold;}
+    .bearish {color: #E74C3C; font-weight: bold;}
+    .neutral {color: #F1C40F; font-weight: bold;}
+    .big-font {font-size: 20px !important;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. SECURITY PROTOCOL ---
+# --- 2. SECURITY (Password) ---
 def check_password():
     if st.session_state.get('password_correct', False): return True
-    st.markdown("## 🔒 RESTRICTED ENVIRONMENT")
-    pwd = st.text_input("ENTER DECRYPTION KEY", type="password")
-    if st.button("ACCESS MAINFRAME"):
+    pwd = st.text_input("ENTER PASSWORD", type="password")
+    if st.button("LOGIN"):
         if pwd == st.secrets["general"]["password"]:
             st.session_state['password_correct'] = True
             st.rerun()
-        else: st.error("⛔ INVALID CREDENTIALS")
     return False
 
 if not check_password(): st.stop()
 
-# --- 3. ASTRO-QUANT ENGINE ---
-LAT, LON = 30.7333, 76.7794 # Chandigarh
+# --- 3. DEEP ASTRO ENGINE (The Brain) ---
+LAT, LON = 30.7333, 76.7794
 
-def get_market_physics(planet_id, target_date=None):
+def get_astro_strength(planet_id, target_date=None):
     if target_date is None: target_date = datetime.now()
     jd = swe.julday(target_date.year, target_date.month, target_date.day, target_date.hour + target_date.minute/60.0)
     
     pos, _ = swe.calc_ut(jd, planet_id)
     sun, _ = swe.calc_ut(jd, swe.SUN)
     
-    # PHYSICS LOGIC
+    # 1. COMBUSTION (Physics)
     dist = abs(pos[0] - sun[0])
-    is_interference = dist < 14.0 # Combust
-    is_latency = pos[3] < 0       # Retrograde
+    is_combust = dist < 14.0
+    
+    # 2. RETROGRADE (Motion)
+    is_retro = pos[3] < 0 
 
-    return {"strength": round(dist, 2), "noise": is_interference, "lag": is_latency}
+    return {"dist": round(dist, 2), "combust": is_combust, "retro": is_retro}
 
-def check_volatility_window():
-    # Rahu Kaal Check (Thursday 1:30-3:00 PM)
+def check_rahu_kaal():
+    # Thursday 1:30-3:00 PM
     now = datetime.now(pytz.timezone('Asia/Kolkata'))
     if now.weekday() == 3 and 13 <= now.hour < 15:
         if now.hour == 13 and now.minute < 30: return False
         return True
     return False
 
-# --- 4. DATA FEED ---
+# --- 4. MARKET DATA FEED ---
 def get_price(ticker):
     try:
         url = f"https://indian-stock-market-api.vercel.app/stock/{ticker}"
@@ -70,121 +67,170 @@ def get_price(ticker):
         return float(data['lastPrice'].replace(',', ''))
     except: return 0.0
 
-# --- 5. SCORING & SELECTION ---
-# Expanded List for Sniper Opportunities
-SECTORS = {
-    "⚡ GRID ALPHA (Power)": {"Planet": swe.SUN, "Ticker": "NTPC"},
-    "🏗️ GRID BETA (Realty)": {"Planet": swe.MARS, "Ticker": "DLF"},
-    "💰 GRID GAMMA (Bank)": {"Planet": swe.JUPITER, "Ticker": "SBIN"}, # Added SBI
-    "🚗 GRID DELTA (Auto)": {"Planet": swe.VENUS, "Ticker": "TATAMOTORS"},
-    "🛢️ GRID EPSILON (Oil)": {"Planet": swe.SATURN, "Ticker": "RELIANCE"} # Added Reliance
+# --- 5. SCORING & SIGNALS ---
+# Full Nifty 50 Heavyweights List
+WATCHLIST = {
+    "NIFTY 50": {"Planet": swe.SUN, "Ticker": "NIFTY 50"}, # Index
+    "BANK NIFTY": {"Planet": swe.JUPITER, "Ticker": "NIFTY BANK"}, # Index
+    "HDFC BANK": {"Planet": swe.JUPITER, "Ticker": "HDFCBANK"},
+    "RELIANCE": {"Planet": swe.SATURN, "Ticker": "RELIANCE"},
+    "ICICI BANK": {"Planet": swe.VENUS, "Ticker": "ICICIBANK"},
+    "INFOSYS": {"Planet": swe.MERCURY, "Ticker": "INFY"},
+    "ITC": {"Planet": swe.VENUS, "Ticker": "ITC"},
+    "TCS": {"Planet": swe.SATURN, "Ticker": "TCS"},
+    "L&T": {"Planet": swe.MARS, "Ticker": "LT"},
+    "AXIS BANK": {"Planet": swe.JUPITER, "Ticker": "AXISBANK"},
+    "NTPC": {"Planet": swe.SUN, "Ticker": "NTPC"},
+    "DLF": {"Planet": swe.MARS, "Ticker": "DLF"},
+    "TATA MOTORS": {"Planet": swe.VENUS, "Ticker": "TATAMOTORS"},
+    "SBI": {"Planet": swe.JUPITER, "Ticker": "SBIN"}
 }
 
-def calculate_score(physics, is_volatility):
-    score = 65 # Neutral Baseline
+def analyze_stock(data, is_rahu):
+    physics = get_astro_strength(data['Planet'])
     
-    # 1. Signal Quality (Combustion)
-    if physics['noise']: score -= 35 
-    elif physics['strength'] > 20: score += 15 
+    # Base Score
+    score = 60
     
-    # 2. Trend Stability (Retrograde)
-    if physics['lag']: score -= 20
+    # Astro Logic
+    if physics['combust']: score -= 35  # Weak
+    elif physics['dist'] > 20: score += 15 # Strong
     
-    # 3. Environment (Rahu Kaal)
-    if is_volatility: score -= 25 # Heavy Penalty
+    if physics['retro']: score -= 20   # Unstable
     
-    return max(0, min(100, score))
+    # Rahu Penalty
+    if is_rahu: score -= 20
+    
+    # Final Signal
+    signal = "NEUTRAL"
+    if score >= 80: signal = "VERY BULLISH"
+    elif score >= 65: signal = "BULLISH"
+    elif score <= 30: signal = "VERY BEARISH"
+    elif score <= 45: signal = "BEARISH"
+    
+    return {
+        "score": max(0, min(100, score)),
+        "signal": signal,
+        "reason": "Combust" if physics['combust'] else "Strong" if physics['dist'] > 20 else "Neutral",
+        "astro": physics
+    }
 
 # --- 6. DASHBOARD UI ---
-st.title("QUANTUM SNIPER v6.0")
-st.caption(f"SYSTEM STATUS: ONLINE | {datetime.now().strftime('%H:%M:%S')}")
+st.title("📈 ASTRO-ALGO TERMINAL")
+st.caption(f"LIVE MARKET DATA | {datetime.now().strftime('%H:%M:%S')}")
 
-# TABS
-tab_sniper, tab_market, tab_tmrw = st.tabs(["🎯 SNIPER SCOPE", "📊 FULL MARKET GRID", "🔮 FUTURE MODEL"])
-
-# GLOBAL CALCULATION (Run once for all tabs)
+# Run Global Scan
 results = []
-is_volatility = check_volatility_window()
+is_rahu = check_rahu_kaal()
 
-for name, data in SECTORS.items():
-    physics = get_market_physics(data['Planet'])
-    score = calculate_score(physics, is_volatility)
-    price = get_price(data['Ticker'])
-    
-    # Determine Signal
-    signal = "NEUTRAL"
-    if score >= 80: signal = "LONG"
-    elif score <= 30: signal = "SHORT"
-    
-    results.append({
-        "Name": name,
-        "Ticker": data['Ticker'],
-        "Price": price,
-        "Score": score,
-        "Signal": signal,
-        "Physics": physics
-    })
+if is_rahu:
+    st.error("⚠️ RAHU KAAL ACTIVE: Market is Volatile. Reduce Quantity.")
 
-# --- TAB 1: SNIPER SCOPE (The 1-2 Trades) ---
-with tab_sniper:
-    if st.button("ACTIVATE TARGET LOCK", type="primary"):
-        # Filter for Extreme Scores Only (Top Tier)
-        snipers = [r for r in results if r['Score'] >= 80 or r['Score'] <= 30]
-        
-        if not snipers:
-            st.info("🔭 NO SNIPER TARGETS DETECTED.")
-            st.markdown("System is holding fire. Market conditions are choppy. **DO NOT FORCE A TRADE.**")
-        else:
-            st.success(f"🎯 TARGET ACQUIRED: {len(snipers)} ASSET(S)")
-            
-            for item in snipers[:2]: # Show max 2 to prevent overtrading
-                # Dynamic Coloring
-                is_long = item['Signal'] == "LONG"
-                color = "#00FF99" if is_long else "#FF3333"
-                direction = "🟢 EXECUTE LONG" if is_long else "🔴 EXECUTE SHORT"
-                box_class = "sniper-box" if is_long else "trap-box"
+for name, data in WATCHLIST.items():
+    try:
+        price = get_price(data['Ticker'])
+        analysis = analyze_stock(data, is_rahu)
+        results.append({
+            "Name": name, 
+            "Price": price, 
+            "Signal": analysis['signal'],
+            "Score": analysis['score'],
+            "Reason": analysis['reason']
+        })
+    except: pass
+
+# --- TABS ---
+tab1, tab2, tab3 = st.tabs(["🎯 SNIPER TRADES", "📊 NIFTY SCANNER", "🔮 TOMORROW & BTST"])
+
+# TAB 1: SNIPER (Best 1-2 Trades)
+with tab1:
+    st.markdown("### 🔥 TODAY'S HIGH CONVICTION TRADES")
+    
+    # Filter for Extreme Scores (>80 or <30)
+    snipers = [r for r in results if r['Score'] >= 80 or r['Score'] <= 30]
+    
+    if not snipers:
+        st.info("No High-Probability setups right now. Market is choppy. Wait.")
+    else:
+        col1, col2 = st.columns(2)
+        for i, trade in enumerate(snipers[:2]): # Max 2 trades
+            with (col1 if i==0 else col2):
+                color = "green" if "BULLISH" in trade['Signal'] else "red"
+                action = "BUY / CALL" if "BULLISH" in trade['Signal'] else "SELL / PUT"
                 
                 st.markdown(f"""
-                <div style="border: 2px solid {color}; padding: 20px; border-radius: 10px; background-color: #050505; margin-bottom: 20px;">
-                    <h2 style="color: {color}; margin:0;">{item['Ticker']}</h2>
-                    <h3 style="color: white; margin:0;">{direction}</h3>
-                    <hr style="border-color: #333;">
-                    <p style="font-family: monospace; font-size: 1.2rem;">
-                    ENTRY PRICE: ₹{item['Price']}<br>
-                    CONFIDENCE: {item['Score']}%<br>
-                    SIGNAL INTEGRITY: {'CLEAN' if not item['Physics']['noise'] else 'NOISY'}
-                    </p>
+                <div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; background-color: #111;">
+                    <h2 style="color: {color};">{trade['Name']}</h2>
+                    <h3 style="color: white;">ACTION: {action}</h3>
+                    <p>Price: ₹{trade['Price']}<br>
+                    Logic: {trade['Reason']} Astro-Alignment<br>
+                    Confidence: {trade['Score']}%</p>
                 </div>
                 """, unsafe_allow_html=True)
 
-# --- TAB 2: FULL GRID (For Context) ---
-with tab_market:
-    st.write("Full Sector Scan (For Analysis Only)")
-    col1, col2 = st.columns(2)
-    for i, item in enumerate(results):
-        with (col1 if i % 2 == 0 else col2):
-            st.metric(
-                label=f"{item['Name']} ({item['Ticker']})",
-                value=f"₹{item['Price']}",
-                delta=f"{item['Score']}/100"
-            )
-            st.progress(item['Score']/100)
+# TAB 2: NIFTY SCANNER (Categorized)
+with tab2:
+    c1, c2, c3, c4 = st.columns(4)
+    
+    with c1:
+        st.markdown("#### 🚀 VERY BULLISH")
+        for r in results:
+            if r['Signal'] == "VERY BULLISH": 
+                st.success(f"{r['Name']} ({r['Price']})")
+                
+    with c2:
+        st.markdown("#### 🟢 BULLISH")
+        for r in results:
+            if r['Signal'] == "BULLISH": 
+                st.info(f"{r['Name']} ({r['Price']})")
+                
+    with c3:
+        st.markdown("#### 🔴 BEARISH")
+        for r in results:
+            if r['Signal'] == "BEARISH": 
+                st.warning(f"{r['Name']} ({r['Price']})")
+                
+    with c4:
+        st.markdown("#### 🩸 VERY BEARISH")
+        for r in results:
+            if r['Signal'] == "VERY BEARISH": 
+                st.error(f"{r['Name']} ({r['Price']})")
 
-# --- TAB 3: TOMORROW (Prediction) ---
-with tab_tmrw:
-    st.info("Simulating T+1 Market Conditions...")
+# TAB 3: TOMORROW & BTST
+with tab3:
+    st.markdown("### 🔮 BTST & TOMORROW'S VIEW")
+    
+    # 1. BTST ANALYSIS (Moon Check)
     tmrw_date = datetime.now() + timedelta(days=1)
     
-    col1, col2 = st.columns(2)
-    for i, (name, data) in enumerate(SECTORS.items()):
-        p_tmrw = get_market_physics(data['Planet'], tmrw_date)
-        s_tmrw = calculate_score(p_tmrw, False)
+    # Check Moon Strength for Tomorrow
+    moon_phys = get_astro_strength(swe.MOON, tmrw_date)
+    is_moon_good = not moon_phys['combust'] # Simple logic for now
+    
+    btst_signal = "✅ BTST BUY" if is_moon_good else "❌ BTST AVOID"
+    btst_color = "green" if is_moon_good else "red"
+    
+    st.markdown(f"""
+    <div style="background-color: #222; padding: 10px; border-left: 5px solid {btst_color};">
+        <h3>BTST DECISION: <span style="color:{btst_color}">{btst_signal}</span></h3>
+        <p>Moon Phase Analysis for Tomorrow Open.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # 2. SECTOR PREDICTION
+    st.markdown("#### 🏗️ SECTOR ROTATION (TOMORROW)")
+    
+    cols = st.columns(3)
+    sectors = [("NTPC (Power)", swe.SUN), ("DLF (Realty)", swe.MARS), ("HDFC (Bank)", swe.JUPITER)]
+    
+    for i, (name, planet) in enumerate(sectors):
+        phys = get_astro_strength(planet, tmrw_date)
+        view = "STRONG" if not phys['combust'] else "WEAK"
+        color = "green" if view == "STRONG" else "red"
         
-        verdict = "BULLISH" if s_tmrw > 60 else "BEARISH" if s_tmrw < 40 else "SIDEWAYS"
-        color = "green" if s_tmrw > 60 else "red"
-        
-        with (col1 if i % 2 == 0 else col2):
+        with cols[i]:
             st.markdown(f"**{name}**")
-            st.markdown(f"Bias: :{color}[{verdict}] ({s_tmrw}%)")
-            if p_tmrw['noise']: st.caption("⚠️ Interference Detect")
-            st.divider()
+            st.markdown(f":{color}[**{view}**]")
+            st.caption(f"Dist from Sun: {phys['dist']}°")
