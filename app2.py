@@ -3,8 +3,8 @@ import swisseph as swe
 from datetime import datetime, timedelta
 import pytz
 
-# ================= UI CONFIG =================
-st.set_page_config(page_title="ASTRO OPTIONS PROOF TERMINAL", page_icon="📈", layout="wide")
+# ================= BASIC SETUP =================
+st.set_page_config(page_title="ASTRO INTRADAY TERMINAL", page_icon="📈", layout="wide")
 
 st.markdown("""
 <style>
@@ -18,6 +18,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+IST = pytz.timezone("Asia/Kolkata")
+
 # ================= PASSWORD =================
 def check_password():
     if st.session_state.get("ok"): return True
@@ -30,8 +32,6 @@ def check_password():
 
 if not check_password(): st.stop()
 
-IST = pytz.timezone("Asia/Kolkata")
-
 # ================= ASTRO CORE =================
 def julian(dt):
     return swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute/60)
@@ -40,29 +40,22 @@ def planet_strength(pid, dt):
     jd = julian(dt)
     p,_ = swe.calc_ut(jd, pid)
     s,_ = swe.calc_ut(jd, swe.SUN)
-
     dist = abs(p[0]-s[0])
-    if dist > 180: dist = 360 - dist
+    if dist > 180: dist = 360-dist
+    return {"combust": dist < 14, "retro": p[3] < 0}
 
-    return {
-        "combust": dist < 14,
-        "retro": p[3] < 0
-    }
-
-def moon_strength(dt):
+def moon_data(dt):
     jd = julian(dt)
     m,_ = swe.calc_ut(jd, swe.MOON)
     s,_ = swe.calc_ut(jd, swe.SUN)
-
     phase = abs(m[0]-s[0])
-    if phase > 180: phase = 360 - phase
-
-    return m[3] > 12.5, round(m[3],2), round(phase,2)
+    if phase > 180: phase = 360-phase
+    return m[3], phase
 
 # ================= RAHU KAAL =================
 RAHU = {0:(7,9),1:(9,10.5),2:(12,13.5),3:(13.5,15),4:(10.5,12)}
 
-def is_rahu(dt):
+def rahu_active(dt):
     if dt.weekday() not in RAHU: return False
     a,b = RAHU[dt.weekday()]
     t = dt.hour + dt.minute/60
@@ -74,131 +67,135 @@ def pvi(dt):
     moon,_ = swe.calc_ut(jd, swe.MOON)
     mars,_ = swe.calc_ut(jd, swe.MARS)
     sun,_ = swe.calc_ut(jd, swe.SUN)
-
     angle = abs(moon[0]-sun[0])
     if angle > 180: angle = 360-angle
-
     v = 40
-    if moon[3] > 13.5: v += 20
-    if angle < 15 or abs(angle-90)<10 or abs(angle-180)<10: v += 20
-    if mars[3] > 0.7: v += 10
-
+    if moon[3] > 12.8: v += 15
+    if angle < 20 or abs(angle-90)<12 or abs(angle-180)<12: v += 15
+    if mars[3] > 0.6: v += 10
     return min(100, v)
 
-# ================= OPTION BIAS =================
-def option_bias(dt, planet):
-    phys = planet_strength(planet, dt)
-    moon_ok, speed, _ = moon_strength(dt)
-    vol = pvi(dt)
-    rahu = is_rahu(dt)
-
-    score = 50
-    if not phys["combust"]: score += 10
-    if phys["retro"]: score -= 20
-    if moon_ok: score += 10
-    score += (vol-50)*0.3
-    if rahu: score -= 15
-
-    if score >= 65: return "BUY CALL", int(score)
-    if score <= 35: return "BUY PUT", int(score)
-    return "NO TRADE", int(score)
-
-# ================= HERO STOCK (FIXED) =================
-def hero_stock_of_day(dt):
-    moon_ok, speed, _ = moon_strength(dt)
-    if speed > 13.5: return "BANKNIFTY"
-    if speed < 12: return "NIFTY"
+# ================= HERO PICK (DAY LOCKED) =================
+def hero_pick_for_day(day_dt):
+    speed, _ = moon_data(day_dt)
+    if speed > 13.2: return "BANKNIFTY"
+    if speed < 12.2: return "NIFTY"
     return "FINNIFTY"
 
-# ================= PICK TIMING =================
-def best_trade_window(dt):
-    hour = dt.hour + dt.minute/60
-    if 9.25 <= hour <= 10.15: return "🔥 OPENING MOMENTUM"
-    if 11.15 <= hour <= 12.30: return "🎯 MIDDAY TREND"
-    if 14.15 <= hour <= 15.10: return "⚡ POWER HOUR"
-    return "⛔ NO EDGE WINDOW"
+def get_hero(dt):
+    key = dt.strftime("%Y-%m-%d")
+    if "hero_day" not in st.session_state or st.session_state.hero_day != key:
+        st.session_state.hero_day = key
+        st.session_state.hero = hero_pick_for_day(dt.replace(hour=9, minute=15))
+    return st.session_state.hero
 
-# ================= EXPIRY TRAP =================
-def expiry_trap(dt):
-    if dt.weekday() != 3: return False
-    mercury = planet_strength(swe.MERCURY, dt)
-    moon_ok, speed, phase = moon_strength(dt)
+# ================= TRADE ENGINE =================
+def trade_state(dt):
+    speed, phase = moon_data(dt)
+    vol = pvi(dt)
+    merc = planet_strength(swe.MERCURY, dt)
 
-    trap = 0
-    if mercury["combust"]: trap += 30
-    if speed < 12: trap += 25
-    if phase < 20 or phase > 160: trap += 20
-    if is_rahu(dt): trap += 25
+    score = 50
+    if speed > 12.8: score += 10
+    if phase < 25 or phase > 155: score -= 10
+    if merc["retro"]: score -= 10
+    if merc["combust"]: score -= 10
+    if rahu_active(dt): score -= 10
+    score += (vol-50)*0.3
 
-    return trap >= 60
+    if score >= 60:
+        return "DIRECTIONAL TRADE", score
+    if score >= 48:
+        return "SCALP TRADE", score
+    return "AVOID / WAIT", score
 
-# ================= BACKTEST ENGINE =================
-def backtest(date, start, end):
-    rows = []
-    t = datetime.combine(date, start).replace(tzinfo=IST)
-    end_t = datetime.combine(date, end).replace(tzinfo=IST)
+def direction_bias(dt):
+    phys = planet_strength(swe.JUPITER, dt)
+    if phys["retro"]: return "PUT BIAS"
+    if phys["combust"]: return "RANGE"
+    return "CALL BIAS"
 
-    while t <= end_t:
-        bias, score = option_bias(t, swe.JUPITER)
-        rows.append({
-            "Time": t.strftime("%H:%M"),
-            "Bias": bias,
-            "Confidence": score,
-            "Volatility": pvi(t),
-            "Rahu": is_rahu(t),
-            "Expiry Trap": expiry_trap(t)
-        })
-        t += timedelta(minutes=15)
-    return rows
+# ================= TIME WINDOWS =================
+def trade_window(dt):
+    t = dt.hour + dt.minute/60
+    if 9.2 <= t <= 10.3: return "OPENING MOMENTUM"
+    if 11.2 <= t <= 12.5: return "MIDDAY MOVE"
+    if 14.1 <= t <= 15.1: return "POWER HOUR"
+    return "LOW EDGE"
 
-# ================= LIVE DASHBOARD =================
-now = datetime.now(IST)
+# ================= MODE TOGGLE =================
+mode = st.sidebar.radio("MODE", ["LIVE", "BACKTEST"])
 
-bias, conf = option_bias(now, swe.JUPITER)
+if mode == "LIVE":
+    now = datetime.now(IST)
+else:
+    date = st.sidebar.date_input("Date")
+    time = st.sidebar.time_input("Time")
+    now = datetime.combine(date, time).replace(tzinfo=IST)
+
+hero = get_hero(now)
+state, conf = trade_state(now)
+bias = direction_bias(now)
 vol = pvi(now)
-hero = hero_stock_of_day(now)
-window = best_trade_window(now)
+window = trade_window(now)
 
-st.title("📈 ASTRO OPTIONS PROOF TERMINAL")
+# ================= HOME =================
+st.title("📈 ASTRO INTRADAY TERMINAL")
 st.caption(now.strftime("%d %b %Y | %H:%M IST"))
 
 c1,c2,c3,c4 = st.columns(4)
-c1.metric("RIGHT NOW", bias)
-c2.metric("CONFIDENCE", f"{conf}%")
+c1.metric("TRADE STATE", state)
+c2.metric("CONFIDENCE", int(conf))
 c3.metric("VOLATILITY", vol)
-c4.metric("HERO STOCK", hero)
+c4.metric("HERO PICK", hero)
 
 st.progress(vol/100)
-
 st.markdown(f"<div class='card big center'>{window}</div>", unsafe_allow_html=True)
 
-if bias == "NO TRADE" or vol < 45 or "NO EDGE" in window:
-    st.warning("🚫 DO NOT TRADE NOW — CAPITAL PROTECTION MODE")
+if state == "AVOID / WAIT":
+    st.warning("🚫 STAY OUT — MARKET NOT PAYING")
+elif state == "SCALP TRADE":
+    st.info(f"⚡ SCALP ONLY | {bias}")
 else:
-    st.success(f"✅ ACTIONABLE: {bias} on {hero}")
+    st.success(f"🔥 DIRECTIONAL | {bias} on {hero}")
 
-if expiry_trap(now):
-    st.error("☠️ EXPIRY DAY ASTRO TRAP — SCALP ONLY OR STAY OUT")
-
-# ================= BACKTEST MODE =================
+# ================= OPTIONS DESK =================
 st.divider()
-st.subheader("🧪 BACKTEST PROOF MODE")
+st.subheader("🧾 OPTIONS DESK")
 
-colA,colB,colC = st.columns(3)
-date = colA.date_input("Select Date")
-start = colB.time_input("Start Time", value=datetime.strptime("09:15","%H:%M").time())
-end = colC.time_input("End Time", value=datetime.strptime("15:15","%H:%M").time())
+if state == "DIRECTIONAL TRADE":
+    st.markdown("**Strategy:** Buy ATM options, trail winners")
+elif state == "SCALP TRADE":
+    st.markdown("**Strategy:** Quick scalps, partial profits")
+else:
+    st.markdown("**Strategy:** No option buying")
 
-if st.button("RUN BACKTEST"):
-    data = backtest(date, start, end)
-    st.dataframe(data, use_container_width=True)
+st.markdown(f"**Bias:** {bias}")
+st.markdown(f"**Avoid new trades during:** LOW EDGE windows")
 
-st.info("""
-HOW TO USE BACKTEST:
-• Pick any past date  
-• See what signal system gave at each 15-min slot  
-• Match with chart manually  
-• This builds REAL confidence  
-""")
+# ================= STOCKS DESK =================
+st.divider()
+st.subheader("📊 INTRADAY STOCK BIAS")
 
-st.success("Terminal fully armed. Discipline decides profits. 😈📈")
+stocks = ["RELIANCE", "HDFC BANK", "ICICI BANK", "INFY", "TCS"]
+for s in stocks:
+    st.markdown(f"- **{s}** → {bias} till {window}")
+
+# ================= BACKTEST TABLE =================
+if mode == "BACKTEST":
+    st.divider()
+    st.subheader("🧪 SIGNAL REPLAY (15-MIN)")
+    t = now.replace(hour=9, minute=15)
+    rows = []
+    while t.hour < 15 or (t.hour==15 and t.minute<=15):
+        s,c = trade_state(t)
+        rows.append({
+            "Time": t.strftime("%H:%M"),
+            "State": s,
+            "Bias": direction_bias(t),
+            "Volatility": pvi(t)
+        })
+        t += timedelta(minutes=15)
+    st.dataframe(rows, use_container_width=True)
+
+st.success("System loaded. Trade discipline > signals. 😈📈")
